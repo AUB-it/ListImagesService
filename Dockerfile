@@ -1,23 +1,21 @@
-﻿FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
-USER $APP_UID
+﻿FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
 WORKDIR /app
-EXPOSE 8080
-EXPOSE 8081
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-ARG BUILD_CONFIGURATION=Release
-WORKDIR /src
-COPY ["ListImagesService/ListImagesService.csproj", "ListImagesService/"]
-RUN dotnet restore "ListImagesService/ListImagesService.csproj"
-COPY . .
-WORKDIR "/src/ListImagesService"
-RUN dotnet build "./ListImagesService.csproj" -c $BUILD_CONFIGURATION -o /app/build
+# Kopier projektfilen og restore
+COPY ["ListImagesService.csproj", "./"]
+RUN dotnet restore "ListImagesService.csproj"
 
-FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./ListImagesService.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+# Kopier resten af koden og publish
+COPY . . 
+RUN dotnet publish "ListImagesService.csproj" -c Release -o /app/published-app
 
-FROM base AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 WORKDIR /app
-COPY --from=publish /app/publish .
+
+# Kopier de færdige filer
+COPY --from=build /app/published-app .
+
+# Miljøvariabel skal matche koden 
+ENV ImagePath=/srv/images
+
 ENTRYPOINT ["dotnet", "ListImagesService.dll"]
